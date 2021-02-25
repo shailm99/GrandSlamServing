@@ -1,0 +1,123 @@
+---
+title: "Mid-Quarter Findings"
+author: "Shail Mirpuri"
+date: "2/5/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+df <- read.csv('grand_slams_15.csv')
+win_serve <- c('w_ace', 'w_df', 'w_svpt', 'w_1stIn', 'w_1stWon',
+       'w_2ndWon', 'w_SvGms', 'w_bpconv')
+lose_serve <- c('l_ace', 'l_df',
+       'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms', 'l_bpconv')
+```
+
+## Exploring the evolution of the serve since 2000
+
+
+```{r cars}
+find_year <- function(x) {
+  as.numeric(paste(unlist(str_split(x, ''))[1:4], collapse = ''))
+}
+df$year <- vapply(df$tourney_date, FUN = find_year, numeric(1))
+tb <- tibble(df)
+
+evol<- tb %>% group_by(year) %>% 
+  summarise(winner_aces = mean(w_ace, na.rm = TRUE),
+            loser_aces = mean(l_ace, na.rm = TRUE),
+            win_df = mean(w_df, na.rm = TRUE),
+            lose_df = mean(l_df, na.rm = TRUE),
+            win_sp = mean(w_svpt, na.rm = TRUE),
+            l_sp = mean(l_svpt, na.rm = TRUE), 
+            w_1stserve = mean(w_1stWon, na.rm = TRUE),
+            w_2ndserve = mean(w_2ndWon, na.rm = TRUE))
+evol
+plot(evol$year,evol$w_1stserve, type = 'b', cex = 0.9, pch = 19, col = 'darkgreen', ylab = '% of points won on the 1st serve',
+     xlab = 'Year', main = 'Has the serve become more important?', ylim = c(50,80))
+plot(evol$year,evol$w_2ndserve, type = 'b')
+
+```
+
+The serve seems to growing in its importance as head into the modern era with names like Milos Raonic, and Nick Kyrgios boasting some amazing serve records. 
+
+## Exploring the difference between surfaces
+
+
+```{r}
+surf<- tb %>% group_by(surface) %>% 
+  summarise(winner_aces = mean(w_ace, na.rm = TRUE),
+            loser_aces = mean(l_ace, na.rm = TRUE),
+            win_df = mean(w_df, na.rm = TRUE),
+            lose_df = mean(l_df, na.rm = TRUE),
+            win_sp = mean(w_svpt, na.rm = TRUE),
+            l_sp = mean(l_svpt, na.rm = TRUE), 
+            w_1stserve = mean(w_1stWon, na.rm = TRUE),
+            w_2ndserve = mean(w_2ndWon, na.rm = TRUE),
+            l_1stserve = mean(l_1stWon, na.rm = TRUE),
+            l_2ndserve = mean(l_2ndWon, na.rm = TRUE))
+surf
+
+surf %>% 
+  mutate(ace_diff = winner_aces - loser_aces,
+         df_diff = win_df - lose_df, first_serve = w_1stserve - l_1stserve, second_serve = w_2ndserve - l_2ndserve) %>% mutate(first_second_serve_diff = first_serve - second_serve) %>% 
+  select(surface, ace_diff, df_diff, first_serve, second_serve, first_second_serve_diff)
+```
+
+We can see that aces seem to matter a lot more in the Wimbledon, while the winning points of your first serves are more important on Clay surfaces. 
+
+## Comparing the big three vs. other seeded players
+
+```{r}
+big_three_w <- df[df$winner_name %in% c("Roger Federer", "Novak Djokovic", "Rafael Nadal"),]
+w <- apply(big_three_w[,win_serve], MARGIN = 2, mean, na.rm = TRUE)
+
+big_three_l <- df[df$loser_name %in% c("Roger Federer", "Novak Djokovic", "Rafael Nadal"),]
+l <- apply(big_three_l[,lose_serve], MARGIN = 2, mean, na.rm = TRUE)
+
+big3 <- w - l
+big3
+```
+
+Again we see here that when the big 'three' win games, the % of points won on their first serve is significantly higher. The second serve is where the big 3 take it to another level when they are playing on form. 
+
+```{r}
+seeded_w <- df[!(df$winner_name %in% c("Roger Federer", "Novak Djokovic", "Rafael Nadal")) & !is.na(df$winner_seed),]
+w <- apply(seeded_w[,win_serve], MARGIN = 2, mean, na.rm = TRUE)
+seeded_l <- df[!(df$loser_name %in% c("Roger Federer", "Novak Djokovic", "Rafael Nadal")) & !is.na(df$loser_seed),]
+l <- apply(seeded_l[,lose_serve], MARGIN = 2, mean, na.rm = TRUE)
+
+seeded <- w - l
+seeded
+```
+
+```{r}
+unseeded_w <- df[is.na(df$winner_seed),]
+w <- apply(unseeded_w[,win_serve], MARGIN = 2, mean, na.rm = TRUE)
+unseeded_l <- df[is.na(df$loser_seed),]
+l <- apply(unseeded_l[,lose_serve], MARGIN = 2, mean, na.rm = TRUE)
+unseeded <- w - l
+unseeded
+```
+
+```{r}
+compare <- rbind(big3, seeded, unseeded)
+rownames(compare) <- c("The Big Three", "Seeded", "Unseeded")
+```
+
+
+From the pivot table above, we can see that the big3 tend to make less mistakes with their serve (i.e. less double faults) when they are on-form and winning matches than when they are losing matches. Apart from this another notable difference is the observation that the second serve of the Big 3 goes to a whole new level when they are winning matches, in comparison to the other two groups. Finally, we can also see that as the quality of the player decreases, the number of aces they rely on in order to win a match increases. This suggests that for lower-quality players focusing on serving aces (i.e. going 'hard' on the serve) can lead to greater success. 
+
+```{r}
+barplot(compare[,1], main = 'Should unseeded players go harder on the serve?', ylab = 'Difference in Average Aces When Winning vs. Losing', col = c('green', 'blue', 'red'))
+```
+
+
+
+```{r}
+barplot(compare[,5], col = c('green', 'blue', 'red'), ylab = 'Difference in % of 1st Serve Won')
+barplot(compare[,6], col = c('green', 'blue', 'red'), ylab = 'Additional % of 2nd Serve Won When Winning',
+        main = "Does the 2nd Serve distinguish the Big Three?")
+```
