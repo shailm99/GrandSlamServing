@@ -10,9 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 df <- read.csv('grand_slams_15.csv')
 win_serve <- c('w_ace', 'w_df', 'w_svpt', 'w_1stIn', 'w_1stWon',
-       'w_2ndWon', 'w_SvGms', 'w_bpconv')
+       'w_2ndWon', 'w_SvGms', 'w_bpconv', 'Year')
 lose_serve <- c('l_ace', 'l_df',
-       'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms', 'l_bpconv')
+       'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms', 'l_bpconv', 'Year')
 ```
 
 ## Exploring the evolution of the serve since 2000
@@ -22,10 +22,10 @@ lose_serve <- c('l_ace', 'l_df',
 find_year <- function(x) {
   as.numeric(paste(unlist(str_split(x, ''))[1:4], collapse = ''))
 }
-df$year <- vapply(df$tourney_date, FUN = find_year, numeric(1))
+df$Year <- vapply(df$tourney_date, FUN = find_year, numeric(1))
 tb <- tibble(df)
 
-evol<- tb %>% group_by(year) %>% 
+evol<- tb %>% group_by(Year) %>% 
   summarise(winner_aces = mean(w_ace, na.rm = TRUE),
             loser_aces = mean(l_ace, na.rm = TRUE),
             win_df = mean(w_df, na.rm = TRUE),
@@ -33,12 +33,12 @@ evol<- tb %>% group_by(year) %>%
             win_sp = mean(w_svpt, na.rm = TRUE),
             l_sp = mean(l_svpt, na.rm = TRUE), 
             w_1stserve = mean(w_1stWon, na.rm = TRUE),
-            w_2ndserve = mean(w_2ndWon, na.rm = TRUE))
+            w_2ndserve = mean(w_2ndWon, na.rm = TRUE), 
+            l_1stserve = mean(l_1stWon, na.rm = TRUE),
+            l_2ndserve = mean(l_2ndWon, na.rm = TRUE)) %>% mutate(diff_1st = w_1stserve - l_1stserve,diff_2nd = w_2ndserve - l_2ndserve )
 evol
-plot(evol$year,evol$w_1stserve, type = 'b', cex = 0.9, pch = 19, col = 'darkgreen', ylab = '% of points won on the 1st serve',
-     xlab = 'Year', main = 'Has the serve become more important?', ylim = c(50,80))
-plot(evol$year,evol$w_2ndserve, type = 'b')
-
+plot(evol$Year,evol$diff_1st, type = 'b', cex = 0.9, pch = 19, col = 'darkgreen', ylab = 'Differential of % points won on the 1st serve',
+     xlab = 'Year', main = 'Has the serve become more important?')
 ```
 
 The serve seems to growing in its importance as head into the modern era with names like Milos Raonic, and Nick Kyrgios boasting some amazing serve records. 
@@ -77,9 +77,28 @@ w <- apply(big_three_w[,win_serve], MARGIN = 2, mean, na.rm = TRUE)
 big_three_l <- df[df$loser_name %in% c("Roger Federer", "Novak Djokovic", "Rafael Nadal"),]
 l <- apply(big_three_l[,lose_serve], MARGIN = 2, mean, na.rm = TRUE)
 
-big3 <- w - l
-big3
+big3_copy <- w - l
+big3_copy
 ```
+
+
+```{r}
+lose <- unname(big_three_l[,lose_serve])
+win <- unname(big_three_w[,win_serve])
+big3 <- as.data.frame(rbind(as.matrix(win), as.matrix(lose)))
+names(big3) <- win_serve
+big3 <- big3 %>% tibble() %>% group_by(Year) %>% summarise(won_1st =  mean(w_1stWon), won_2nd =  mean(w_2ndWon))
+ggplot(big3, aes(x = Year, y = won_1st, color = won_2nd)) + geom_line() + scale_color_gradient(low = 'red', high = 'green') + labs(y = 'Average percentage (%) points won on the serve', title = 'Evolution of the Big Three\'s Serves Through Their Careers' )+ theme_bw()
+colors <- c("First Serve" = "darkgreen", "Second Serve" = "red")
+big3$`First Serve` <- big3$won_1st
+big3$`Second Serve` <- big3$won_2nd
+big3 <- big3[,c(-2,-3)] 
+pivot_longer(big3, col = c("First Serve", "Second Serve"), names_to = "Type of Serve", values_to = "Percentage") %>% 
+  ggplot() + geom_line(aes(x = Year, y = Percentage, color = `Type of Serve`)) + labs(y = 'Average percentage (%) points won on the serve', title = 'Evolution of the Big Three\'s Serves Through Their Careers', color = "Legend" )+ scale_colour_manual(values=c("darkgreen","red"))+ theme_bw()  
+```
+
+
+
 
 Again we see here that when the big 'three' win games, the % of points won on their first serve is significantly higher. The second serve is where the big 3 take it to another level when they are playing on form. 
 
@@ -103,7 +122,7 @@ unseeded
 ```
 
 ```{r}
-compare <- rbind(big3, seeded, unseeded)
+compare <- rbind(big3_copy, seeded, unseeded)
 rownames(compare) <- c("The Big Three", "Seeded", "Unseeded")
 ```
 
